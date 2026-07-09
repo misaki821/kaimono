@@ -687,13 +687,9 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
       const r = await rkTry(v.p);
       attempts.push(`${v.label}: HTTP ${r.status}${r.res.error ? "(" + (r.res.error_description || r.res.error) + ")" : ""}`);
       if (r.ok) { got = r.res; break; }
-      if (r.status === 403) break; // 認証系の失敗は形を変えても通らないので即終了
       await sleep(2500);
     }
-    if (!got) {
-      if (attempts.some(a => a.includes("403"))) throw new Error("アクセスが拒否されました(403)。ID/キーの誤りか、「許可されたウェブサイト」制限が原因です");
-      throw new Error("すべての方式で失敗 → " + attempts.join(" ／ "));
-    }
+    if (!got) throw new Error("すべての方式で失敗 → " + attempts.join(" ／ "));
     const minP = num("jdMinPrice");
     const ngWords = ["中古", "レンタル落ち", "見積", "サンプル"];
     const items = (got.Items || []).map(x => x.Item ? x.Item : x) // レスポンス形式の新旧どちらにも対応
