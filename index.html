@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日用品ストック &amp; 楽天マラソン管理</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1f2430;
+    --sub: #6b7280;
+    --accent: #bf0000;      /* 楽天レッド */
+    --accent-soft: #fdecec;
+    --ok: #15803d;
+    --ok-soft: #dcfce7;
+    --warn: #b45309;
+    --warn-soft: #fef3c7;
+    --bad: #b91c1c;
+    --bad-soft: #fee2e2;
+    --border: #e2e5ea;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
+    font-size: 14px; line-height: 1.6;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header h1 span { color: var(--accent); }
+  .spacer { flex: 1; }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 60px; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 6px; margin: 12px 0 16px; flex-wrap: wrap; }
+  .tabs button {
+    border: 1px solid var(--border); background: var(--card); color: var(--sub);
+    padding: 8px 16px; border-radius: 999px; cursor: pointer; font-size: 14px;
+  }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .card h2 small { color: var(--sub); font-weight: normal; margin-left: 8px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--sub); font-weight: 600; font-size: 12px; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge.ok   { background: var(--ok-soft);   color: var(--ok); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.bad  { background: var(--bad-soft);  color: var(--bad); }
+  .badge.info { background: #e0e7ff; color: #3730a3; }
+
+  input, select {
+    font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; color: var(--text); max-width: 100%;
+  }
+  input:focus, select:focus { outline: 2px solid #fca5a5; border-color: var(--accent); }
+  input[type="number"] { text-align: right; }
+  label.fld { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--sub); }
+  label.fld b { color: var(--text); }
+  .fields { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+
+  button.btn {
+    font: inherit; padding: 7px 16px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: #fff; color: var(--text);
+  }
+  button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.btn.small { padding: 3px 10px; font-size: 12px; }
+  button.btn.danger { color: var(--bad); }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .stat { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+  .stat .label { font-size: 12px; color: var(--sub); }
+  .stat .value { font-size: 20px; font-weight: 700; }
+  .stat .value small { font-size: 12px; font-weight: normal; color: var(--sub); }
+
+  .progress { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .progress > div { height: 100%; background: var(--accent); border-radius: 999px; }
+  .progress > div.full { background: var(--bad); }
+
+  .note { font-size: 12px; color: var(--sub); }
+  .verdict { border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; }
+  .verdict.buy  { background: var(--ok-soft); border: 1px solid #86efac; }
+  .verdict.hold { background: var(--warn-soft); border: 1px solid #fcd34d; }
+  .verdict.skip { background: var(--bad-soft); border: 1px solid #fca5a5; }
+  .verdict h3 { margin: 0 0 6px; font-size: 16px; }
+  .verdict table { margin-top: 8px; }
+  .verdict td, .verdict th { border-bottom: 1px solid rgba(0,0,0,.08); }
+
+  details.help { margin-bottom: 16px; }
+  details.help summary { cursor: pointer; color: var(--sub); font-size: 13px; }
+  details.help .card { margin-top: 8px; }
+  dt { font-weight: 700; margin-top: 8px; }
+  dd { margin: 0 0 4px; color: var(--sub); font-size: 13px; }
+
+  .shop-head td { background: #fafafa; font-weight: 700; }
+  .muted { color: var(--sub); }
+  @media (max-width: 640px) { .fields { flex-direction: column; align-items: stretch; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>楽天マラソン</span> × 日用品ストック管理</h1>
+  <div class="spacer"></div>
+  <button class="btn small" id="btnExport">データ書き出し</button>
+  <button class="btn small" id="btnImport">データ読み込み</button>
+  <input type="file" id="fileImport" accept=".json" style="display:none">
+</header>
+
+<main>
+
+<details class="help">
+  <summary>📖 お買い物マラソンの仕組みと、このアプリの考え方(はじめに読んでください)</summary>
+  <div class="card">
+    <dl>
+      <dt>買いまわり(かいまわり)とは</dt>
+      <dd>マラソン期間中に「1回の注文で1,000円(税込)以上」買ったショップの数に応じて、ポイント倍率が上がる仕組み。1店舗なら通常の1倍、2店舗で2倍…最大10店舗で10倍(=通常1%+ボーナス9%)。<b>倍率アップ分は、期間中に買った全ての対象商品にさかのぼって適用されます。</b></dd>
+      <dt>ポイント計算のベース</dt>
+      <dd>2022年4月から<b>税抜(ぜいぬき)価格</b>で計算されます(税込価格÷1.1が目安)。送料・ラッピング代は対象外です。</dd>
+      <dt>上限ポイント</dt>
+      <dd>買いまわりボーナス分には獲得上限があります(通常7,000pt。回によって5,000ptや10,000ptのことも)。<b>毎回、開催ページで必ず確認</b>して、設定画面で変更してください。</dd>
+      <dt>期間限定ポイント</dt>
+      <dd>買いまわりボーナス分は「期間限定ポイント」として翌月15日頃に付与され、<b>付与された月の翌月末で失効</b>します。使い忘れに注意。</dd>
+      <dt>その他の注意</dt>
+      <dd>・エントリー必須(期間中なら買い物の後でもOK)<br>・クーポン適用後999円以下の注文はカウント外<br>・楽天ふるさと納税は2025年10月からカウント・ポイントとも対象外<br>・SPUや「5と0のつく日」は別枠で計算され、それぞれ別の上限があります</dd>
+      <dt>このアプリの「買うべきか判定」の考え方</dt>
+      <dd>新しい店で買うと「①その商品自体につくポイント」と「②過去に買った分への+1%(押し上げ効果)」が同時に発生します。<b>②はその店で何を買っても発生する</b>ので、「この商品は本当に安いのか?」は①だけで判定し、②は「店数を増やすこと自体の価値」として別に表示します。これで『ポイントがたくさん付くように見えるけど実は割高』を見抜けます。</dd>
+    </dl>
+  </div>
+</details>
+
+<div class="tabs" id="tabs">
+  <button data-tab="stock" class="active">📦 ストック管理</button>
+  <button data-tab="cart">🛒 買い物リスト</button>
+  <button data-tab="judge">🤔 買うべきか判定</button>
+  <button data-tab="history">📜 購入履歴</button>
+  <button data-tab="settings">⚙ 設定</button>
+</div>
+
+<!-- ============ ストック管理 ============ -->
+<div class="tab-panel active" id="tab-stock">
+  <div class="card">
+    <h2>ストック(在庫)を追加 <small>消耗品を登録して、残りどれくらいもつか管理します</small></h2>
+    <div class="fields">
+      <label class="fld"><b>品名</b><input id="stName" placeholder="例: 洗濯洗剤 詰替"></label>
+      <label class="fld"><b>カテゴリ</b><input id="stCat" placeholder="例: 洗剤" list="catList" style="width:110px"></label>
+      <label class="fld"><b>在庫数</b><input id="stQty" type="number" min="0" step="0.5" value="0" style="width:80px"></label>
+      <label class="fld"><b>1ヶ月に使う量</b><input id="stUse" type="number" min="0" step="0.1" value="1" style="width:90px"></label>
+      <label class="fld"><b>1個の内容量※</b><input id="stAmount" type="number" min="0" value="" placeholder="例: 800" style="width:90px"></label>
+      <label class="fld"><b>単位</b><input id="stUnit" placeholder="ml/枚/回" style="width:70px"></label>
+      <label class="fld"><b>スーパー等の価格(税込)※</b><input id="stRefSuper" type="number" min="0" value="" placeholder="例: 398" style="width:110px"></label>
+      <label class="fld"><b>Amazon価格(税込)※</b><input id="stRefAmazon" type="number" min="0" value="" placeholder="例: 425" style="width:110px"></label>
+      <button class="btn primary" id="btnAddStock">追加</button>
+    </div>
+    <p class="note">※価格はスーパーやドラッグストアで見た値段(手動でメモ)とAmazonの値段。「内容量」はその価格の1個分の量(例: 詰替800ml)。楽天はサイズ違いが多いので、内容量を入れると「100mlあたり」の単価で正しく比較できます。Amazon価格は一覧の🔍リンクからすぐ確認できます。</p>
+    <datalist id="catList"></datalist>
+  </div>
+
+  <div class="card">
+    <h2>ストック一覧</h2>
+    <div class="table-wrap">
+      <table id="stockTable">
+        <thead>
+          <tr><th>品名</th><th>カテゴリ</th><th class="num">在庫</th><th class="num">月間使用</th><th class="num">残り目安</th><th>状態</th><th class="num">内容量</th><th class="num">スーパー等</th><th class="num">Amazon</th><th class="num">前回/底値</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="note">残り目安が2ヶ月を切ると「そろそろ」、1ヶ月を切ると「買い時」になります。在庫数・使用量はセル内で直接編集できます。<b>在庫は開くたびに経過日数分だけ自動で減ります</b>(月間使用量から計算)。実際の残りとズレたら在庫数を直してください。</p>
+  </div>
+</div>
+
+<!-- ============ 買い物リスト ============ -->
+<div class="tab-panel" id="tab-cart">
+  <div class="card">
+    <h2>今回のマラソン サマリー</h2>
+    <div class="summary-grid" id="cartSummary"></div>
+    <div id="capBar"></div>
+    <p class="note" id="cartNotes"></p>
+  </div>
+
+  <div class="card">
+    <h2>🏃 完走プランナー <small>店数を増やすこと自体の価値と、埋め方の候補</small></h2>
+    <div id="planner"></div>
+  </div>
+
+  <div class="card">
+    <h2>注文を追加 <small>1行 = 1注文(同じ店でまとめ買いするなら合計金額で1行)</small></h2>
+    <div class="fields">
+      <label class="fld"><b>ショップ名</b><input id="caShop" placeholder="例: 日用品の△△店" list="shopList"></label>
+      <label class="fld"><b>内容(品名)</b><input id="caItem" placeholder="例: 洗剤×3、柔軟剤×2" list="itemList"></label>
+      <label class="fld"><b>商品代 税込(送料除く)</b><input id="caPrice" type="number" min="0" value="" style="width:120px"></label>
+      <label class="fld"><b>送料</b><input id="caShip" type="number" min="0" value="0" style="width:80px"></label>
+      <label class="fld"><b>店独自の倍率(+%)</b><input id="caBonus" type="number" min="0" value="0" style="width:80px"></label>
+      <label class="fld"><b>状態</b><select id="caStatus"><option value="plan">検討中</option><option value="bought">購入済み</option></select></label>
+      <button class="btn primary" id="btnAddCart">追加</button>
+    </div>
+    <datalist id="shopList"></datalist>
+    <datalist id="itemList"></datalist>
+  </div>
+
+  <div class="card">
+    <h2>ショップ別 注文リスト <small>1,000円未満の注文は買いまわりにカウントされません</small></h2>
+    <div class="table-wrap">
+      <table id="cartTable">
+        <thead><tr><th>内容</th><th class="num">商品代(税込)</th><th class="num">送料</th><th class="num">店倍率</th><th>状態</th><th>買いまわり</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn" id="btnFinishMarathon">🏁 マラソン終了(履歴に保存してリストを空にする)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 買うべきか判定 ============ -->
+<div class="tab-panel" id="tab-judge">
+  <div class="card">
+    <h2>いまの状況</h2>
+    <div class="summary-grid" id="judgeContext"></div>
+  </div>
+
+  <div class="card">
+    <h2>この商品、買うべき? <small>楽天の価格とふだんの価格を入れると実質価格で判定します</small></h2>
+    <div class="fields">
+      <label class="fld"><b>品名</b><input id="jdName" placeholder="ストック品名を選ぶと参考価格が自動入力" list="itemList2"></label>
+      <label class="fld"><b>楽天の価格 税込(送料除く)</b><input id="jdPrice" type="number" min="0" style="width:130px"></label>
+      <label class="fld"><b>楽天の内容量(合計)※</b><input id="jdAmount" type="number" min="0" placeholder="例: 2400" style="width:100px"></label>
+      <label class="fld"><b>送料</b><input id="jdShip" type="number" min="0" value="0" style="width:80px"></label>
+      <label class="fld"><b>スーパー等の価格(税込)</b><input id="jdRefSuper" type="number" min="0" style="width:120px"></label>
+      <label class="fld"><b>Amazon価格(税込)</b><input id="jdRefAmazon" type="number" min="0" style="width:120px"></label>
+      <label class="fld"><b>比較価格側の内容量※</b><input id="jdRefAmount" type="number" min="0" placeholder="例: 800" style="width:100px"></label>
+      <label class="fld"><b>店独自の倍率(+%)</b><input id="jdBonus" type="number" min="0" value="0" style="width:80px"></label>
+      <label class="fld"><b>どの店で買う?</b><select id="jdShop"></select></label>
+      <button class="btn primary" id="btnJudge">判定する</button>
+      <button class="btn" id="btnRakutenSearch">🔍 楽天の最安を自動検索</button>
+    </div>
+    <datalist id="itemList2"></datalist>
+    <div id="rkResults"></div>
+    <p class="note">※内容量: サイズ違いを正しく比べるための欄(任意)。楽天側は「800ml×3個なら2400」のように合計量、比較価格側はその価格の1個分の量を入れると、単位あたりの単価で比較します。空欄なら価格をそのまま比べます。</p>
+    <p class="note" id="jdLinks"></p>
+    <div id="judgeResult"></div>
+  </div>
+</div>
+
+<!-- ============ 履歴 ============ -->
+<div class="tab-panel" id="tab-history">
+  <div class="card">
+    <h2>💰 ポイント付与・失効カレンダー <small>買いまわり分は期間限定ポイント。失効前に使い切りましょう</small></h2>
+    <div id="pointCalendar"><p class="note">履歴が保存されると、付与予定日と失効日がここに表示されます。</p></div>
+  </div>
+  <div class="card">
+    <h2>過去のマラソン <button class="btn small" id="btnCsv" style="float:right">CSV書き出し(Excel用)</button></h2>
+    <div id="historyList"><p class="note">まだ履歴がありません。「買い物リスト」タブでマラソンを終了すると、ここに保存されます。</p></div>
+  </div>
+</div>
+
+<!-- ============ 設定 ============ -->
+<div class="tab-panel" id="tab-settings">
+  <div class="card">
+    <h2>ポイント計算の設定 <small>マラソンごとに開催ページで上限を確認して更新してください</small></h2>
+    <div class="fields">
+      <label class="fld"><b>買いまわり上限ポイント</b><input id="setCap" type="number" min="0" step="500" style="width:110px"></label>
+      <label class="fld"><b>SPUなど常時つく倍率の合計(+%)※1</b><input id="setSpu" type="number" min="0" step="0.5" style="width:110px"></label>
+      <label class="fld"><b>5と0のつく日(+%)※2</b><input id="setGoZero" type="number" min="0" step="1" style="width:90px"></label>
+      <label class="fld"><b>5と0のつく日に買う?</b><select id="setGoZeroOn"><option value="0">いいえ</option><option value="1">はい</option></select></label>
+      <label class="fld"><b>期間限定ポイントの価値(円/pt)※3</b><input id="setPtValue" type="number" min="0" max="1" step="0.05" style="width:90px"></label>
+      <label class="fld"><b>楽天アプリケーションID※4</b><input id="setAppId" placeholder="例: 2fc160ec-26f2-..." style="width:230px"></label>
+      <label class="fld"><b>楽天アクセスキー※4</b><input id="setAccessKey" placeholder="pk_ で始まる文字列" style="width:230px"></label>
+      <button class="btn primary" id="btnSaveSettings">保存</button>
+    </div>
+    <p class="note">
+      ※1 SPU(スーパーポイントアッププログラム) = 楽天カードや楽天モバイルなどの利用状況で常につく倍率。自分の倍率は楽天市場アプリのトップで確認できます。通常ポイント1%は自動で計算に入れるので、ここには「1倍を除いた追加分」を入れてください(例: 楽天カード分+2なら「2」)。<br>
+      ※2 「5と0のつく日」はエントリー+楽天カード払いが条件。倍率や上限は変わることがあるので公式ページで確認を。<br>
+      ※3 買いまわり分は期限の短い期間限定ポイントなので、確実に使い切れる自信がなければ 0.8〜0.9 程度に下げると、より現実的な判定になります。<br>
+      ※4 「買うべきか判定」タブで楽天内の最安値を自動検索する機能に使います。<a href="https://webservice.rakuten.co.jp/" target="_blank">楽天ウェブサービス</a>でアプリを作成すると、「アプリケーションID」(ハイフン入りの英数字)と「アクセスキー」(pk_で始まる)の2つが発行されるので、両方貼り付けてください(2026年の新仕様ではこの2つが必要です)。
+    </p>
+  </div>
+  <div class="card">
+    <h2>データについて</h2>
+    <p class="note">データはこのブラウザの中(localStorage)に自動保存されます。パソコンの買い替えやブラウザ変更に備えて、ときどきヘッダーの「データ書き出し」でJSONファイルを保存しておくのがおすすめです。</p>
+    <button class="btn danger" id="btnReset">全データを削除する</button>
+  </div>
+</div>
+
+<footer style="text-align:center; padding:24px 0 8px; font-size:12px; color:var(--sub);">
+  <a href="https://webservice.rakuten.co.jp/" target="_blank" style="color:inherit;">Supported by Rakuten Developers</a>
+</footer>
+</main>
+
+<script>
+"use strict";
+/* ================= データ管理 ================= */
+const STORE_KEY = "rakuten-stock-app-v1";
+
+const defaultData = () => ({
+  settings: { cap: 7000, spu: 2, goZero: 2, goZeroOn: 0, ptValue: 1.0, rakutenAppId: "" },
+  items: [],      // {id, name, cat, qty, monthlyUse, refSuper, refAmazon, refAmount, unit, lastUpdated}
+  purchases: [],  // {id, shop, item, price, ship, bonus, status, amount}
+  history: []     // {date, dateISO, purchases(+effective), summary}
+});
+
+let data = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return defaultData();
+    const d = JSON.parse(raw);
+    const merged = Object.assign(defaultData(), d, { settings: Object.assign(defaultData().settings, d.settings || {}) });
+    // 旧バージョンの refPrice を refSuper に引き継ぎ
+    for (const it of merged.items) if (it.refPrice != null && it.refSuper == null) { it.refSuper = it.refPrice; delete it.refPrice; }
+    return merged;
+  } catch (e) { return defaultData(); }
+}
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+// 在庫の自動減算: 前回開いた日からの経過日数 × 月間使用量÷30 だけ在庫を自動で減らす
+function applyAutoDecay() {
+  const today = new Date().toISOString().slice(0, 10);
+  let changed = false;
+  for (const it of data.items) {
+    if (!it.lastUpdated) { it.lastUpdated = today; changed = true; continue; }
+    const days = Math.floor((new Date(today) - new Date(it.lastUpdated)) / 86400000);
+    if (days >= 1) {
+      if (it.monthlyUse > 0 && it.qty > 0) it.qty = Math.max(0, Math.round((it.qty - days * it.monthlyUse / 30) * 100) / 100);
+      it.lastUpdated = today; changed = true;
+    }
+  }
+  if (changed) save();
+}
+const uid = () => Math.random().toString(36).slice(2, 10);
+const yen = n => "¥" + Math.round(n).toLocaleString("ja-JP");
+const pt  = n => Math.floor(n).toLocaleString("ja-JP") + "pt";
+const excl = priceIncl => Math.floor(priceIncl / 1.1); // 税抜換算(日用品は消費税10%)
+
+/* ================= ポイント計算の中核 ================= */
+// purchases(検討中含む)から現在の買いまわり状態を計算する
+function calcState(purchases, s) {
+  const eligible = purchases.filter(p => p.price >= 1000);          // 1,000円(税込)以上の注文のみ対象
+  const shops = [...new Set(eligible.map(p => p.shop.trim()))].filter(Boolean);
+  const shopCount = shops.length;
+  const rate = Math.min(9, Math.max(0, shopCount - 1));             // 買いまわりボーナス% (最大+9%)
+  const baseExcl = eligible.reduce((a, p) => a + excl(p.price), 0); // ボーナス対象の税抜合計
+  const kaimawariRaw = Math.floor(baseExcl * rate / 100);
+  const kaimawariPt = Math.min(s.cap, kaimawariRaw);
+  const allExcl = purchases.reduce((a, p) => a + excl(p.price), 0);
+  const normalPt = Math.floor(allExcl * 1 / 100);
+  const spuPt = Math.floor(allExcl * s.spu / 100);
+  const goZeroPt = s.goZeroOn ? Math.floor(allExcl * s.goZero / 100) : 0;
+  const shopBonusPt = purchases.reduce((a, p) => a + Math.floor(excl(p.price) * (p.bonus || 0) / 100), 0);
+  const totalIncl = purchases.reduce((a, p) => a + p.price + (p.ship || 0), 0);
+  const totalPt = kaimawariPt + normalPt + spuPt + goZeroPt + shopBonusPt;
+  return { eligible, shops, shopCount, rate, baseExcl, kaimawariRaw, kaimawariPt, normalPt, spuPt, goZeroPt, shopBonusPt, totalIncl, totalPt, allExcl, capped: kaimawariRaw > s.cap };
+}
+
+// 候補商品を追加した場合の「増分」を、商品自身の分と押し上げ効果に分けて計算する
+function judgeCandidate(cand, purchases, s) {
+  const before = calcState(purchases, s);
+  const after  = calcState([...purchases, cand], s);
+
+  const dKaimawari = after.kaimawariPt - before.kaimawariPt;
+  const candExcl = excl(cand.price);
+  // 商品自身につく買いまわり分(追加後の倍率で計算、上限で頭打ちの場合はそちらを優先)
+  const itemKaimawari = Math.min(dKaimawari, cand.price >= 1000 ? Math.floor(candExcl * after.rate / 100) : 0);
+  const retroPt = dKaimawari - itemKaimawari; // 過去購入分への押し上げ効果
+
+  const itemOtherPt = Math.floor(candExcl * 1 / 100)
+    + Math.floor(candExcl * s.spu / 100)
+    + (s.goZeroOn ? Math.floor(candExcl * s.goZero / 100) : 0)
+    + Math.floor(candExcl * (cand.bonus || 0) / 100);
+
+  const itemPt = itemKaimawari + itemOtherPt;
+  const pay = cand.price + (cand.ship || 0);
+  const effective = pay - itemPt * s.ptValue;
+  return { before, after, itemPt, itemKaimawari, itemOtherPt, retroPt, pay, effective, candExcl };
+}
+
+/* ================= タブ ================= */
+document.getElementById("tabs").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b === btn));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + btn.dataset.tab));
+  renderAll();
+});
+
+/* ================= ストック管理 ================= */
+function lastBought(name) {
+  // 履歴と現在のリストから、その品名の最後の購入を探す
+  const all = [];
+  for (const h of data.history) for (const p of h.purchases) if (p.status === "bought") all.push({ date: h.date, p });
+  for (const p of data.purchases) if (p.status === "bought") all.push({ date: "今回", p });
+  const hits = all.filter(x => x.p.item.includes(name));
+  return hits.length ? hits[hits.length - 1] : null;
+}
+
+// 過去の底値(履歴の中で実質価格がいちばん安かった購入)を探す
+function bottomPrice(name) {
+  if (!name) return null;
+  let best = null;
+  for (const h of data.history) for (const p of h.purchases) {
+    if (!p.item.includes(name)) continue;
+    const eff = p.effective != null ? p.effective : p.price;
+    if (!best || eff < best.eff) best = { eff, date: h.date, amount: p.amount || 0 };
+  }
+  return best;
+}
+
+function renderStock() {
+  const tb = document.querySelector("#stockTable tbody");
+  tb.innerHTML = "";
+  const sorted = [...data.items].sort((a, b) => monthsLeft(a) - monthsLeft(b));
+  for (const it of sorted) {
+    const m = monthsLeft(it);
+    let badge = '<span class="badge ok">十分</span>';
+    if (m < 1) badge = '<span class="badge bad">買い時</span>';
+    else if (m < 2) badge = '<span class="badge warn">そろそろ</span>';
+    const lb = lastBought(it.name);
+    const bp = bottomPrice(it.name);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${esc(it.name)}</td>
+      <td class="muted">${esc(it.cat || "")}</td>
+      <td class="num"><input type="number" step="0.5" min="0" value="${it.qty}" style="width:64px" data-edit="qty" data-id="${it.id}"></td>
+      <td class="num"><input type="number" step="0.1" min="0" value="${it.monthlyUse}" style="width:64px" data-edit="monthlyUse" data-id="${it.id}"></td>
+      <td class="num">${isFinite(m) ? m.toFixed(1) + "ヶ月" : "—"}</td>
+      <td>${badge}</td>
+      <td class="num"><input type="number" min="0" value="${it.refAmount || ""}" placeholder="—" style="width:64px" data-edit="refAmount" data-id="${it.id}"><span class="note">${esc(it.unit || "")}</span></td>
+      <td class="num"><input type="number" min="0" value="${it.refSuper || ""}" placeholder="—" style="width:76px" data-edit="refSuper" data-id="${it.id}"></td>
+      <td class="num"><input type="number" min="0" value="${it.refAmazon || ""}" placeholder="—" style="width:76px" data-edit="refAmazon" data-id="${it.id}"> <a href="${amazonUrl(it.name)}" target="_blank" title="Amazonで検索">🔍</a></td>
+      <td class="num note">${lb ? "前回 " + yen(lb.p.price) : "—"}${bp ? "<br>底値 <b>" + yen(bp.eff) + "</b>" : ""}</td>
+      <td><button class="btn small" data-judge="${it.id}">判定へ</button> <button class="btn small danger" data-del="${it.id}">削除</button></td>`;
+    tb.appendChild(tr);
+  }
+  const cats = [...new Set(data.items.map(i => i.cat).filter(Boolean))];
+  document.getElementById("catList").innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
+  const names = data.items.map(i => i.name);
+  const opts = names.map(n => `<option value="${esc(n)}">`).join("");
+  document.getElementById("itemList").innerHTML = opts;
+  document.getElementById("itemList2").innerHTML = opts;
+}
+const monthsLeft = it => it.monthlyUse > 0 ? it.qty / it.monthlyUse : Infinity;
+
+document.getElementById("btnAddStock").addEventListener("click", () => {
+  const name = val("stName").trim();
+  if (!name) { alert("品名を入れてください"); return; }
+  data.items.push({ id: uid(), name, cat: val("stCat").trim(), qty: num("stQty"), monthlyUse: num("stUse"), refAmount: num("stAmount"), unit: val("stUnit").trim(), refSuper: num("stRefSuper"), refAmazon: num("stRefAmazon"), lastUpdated: new Date().toISOString().slice(0, 10) });
+  ["stName", "stCat", "stAmount", "stUnit", "stRefSuper", "stRefAmazon"].forEach(id => document.getElementById(id).value = "");
+  save(); renderAll();
+});
+
+document.querySelector("#stockTable").addEventListener("change", e => {
+  const el = e.target; if (!el.dataset.edit) return;
+  const it = data.items.find(i => i.id === el.dataset.id); if (!it) return;
+  it[el.dataset.edit] = parseFloat(el.value) || 0;
+  if (el.dataset.edit === "qty") it.lastUpdated = new Date().toISOString().slice(0, 10); // 手動修正日を基準に自動減算し直す
+  save(); renderAll();
+});
+document.querySelector("#stockTable").addEventListener("click", e => {
+  const del = e.target.dataset.del, jd = e.target.dataset.judge;
+  if (del) {
+    const it = data.items.find(i => i.id === del);
+    if (confirm(`「${it.name}」をストック一覧から削除しますか?`)) { data.items = data.items.filter(i => i.id !== del); save(); renderAll(); }
+  }
+  if (jd) {
+    const it = data.items.find(i => i.id === jd);
+    document.getElementById("jdName").value = it.name;
+    document.getElementById("jdName").dispatchEvent(new Event("input"));
+    switchTab("judge");
+  }
+});
+
+/* ================= 買い物リスト ================= */
+document.getElementById("btnAddCart").addEventListener("click", () => {
+  const shop = val("caShop").trim(), item = val("caItem").trim(), price = num("caPrice");
+  if (!shop || !price) { alert("ショップ名と商品代を入れてください"); return; }
+  data.purchases.push({ id: uid(), shop, item: item || "(内容未入力)", price, ship: num("caShip"), bonus: num("caBonus"), status: val("caStatus") });
+  ["caItem", "caPrice"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("caShip").value = 0; document.getElementById("caBonus").value = 0;
+  save(); renderAll();
+});
+
+function renderCart() {
+  const s = data.settings;
+  const st = calcState(data.purchases, s);
+  const effTotal = st.totalIncl - st.totalPt * s.ptValue;
+
+  // サマリー
+  document.getElementById("cartSummary").innerHTML = `
+    ${stat("対象ショップ数", `${st.shopCount}<small> / 10店</small>`)}
+    ${stat("いまの倍率", `${Math.min(10, Math.max(1, st.shopCount))}倍<small>(通常1%+買いまわり${st.rate}%)</small>`)}
+    ${stat("支払合計(送料込)", yen(st.totalIncl))}
+    ${stat("獲得予定ポイント", `${pt(st.totalPt)}`)}
+    ${stat("実質支払額", `${yen(effTotal)}<small> (実質${st.totalIncl ? (100 * (st.totalIncl - effTotal) / st.totalIncl).toFixed(1) : 0}%引)</small>`)}
+  `;
+
+  // 上限バー
+  const capPct = Math.min(100, s.cap ? 100 * st.kaimawariPt / s.cap : 0);
+  const remainPt = Math.max(0, s.cap - st.kaimawariPt);
+  const remainSpend = st.rate > 0 ? Math.floor(remainPt / (st.rate / 100)) : null;
+  document.getElementById("capBar").innerHTML = `
+    <div style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px" class="muted">
+        <span>買いまわりボーナス: ${pt(st.kaimawariPt)} / 上限${pt(s.cap)}</span>
+        <span>${st.capped ? "⚠ 上限到達! これ以上買いまわり分は増えません" : (st.rate > 0 ? `上限まで税抜あと約${yen(remainSpend)}分買える` : "")}</span>
+      </div>
+      <div class="progress"><div class="${st.capped ? "full" : ""}" style="width:${capPct}%"></div></div>
+    </div>`;
+
+  // 内訳ノート
+  document.getElementById("cartNotes").innerHTML =
+    `内訳: 通常${pt(st.normalPt)} + SPU分${pt(st.spuPt)} + 買いまわり${pt(st.kaimawariPt)}` +
+    (s.goZeroOn ? ` + 5と0の日${pt(st.goZeroPt)}` : "") +
+    (st.shopBonusPt ? ` + 店独自${pt(st.shopBonusPt)}` : "") +
+    `。買いまわり分は期間限定ポイント(翌月15日頃付与・付与月の翌月末まで)です。SPU・5と0の日にも別途上限があります。`;
+
+  // ショップ別テーブル
+  const tb = document.querySelector("#cartTable tbody");
+  tb.innerHTML = "";
+  const byShop = {};
+  for (const p of data.purchases) (byShop[p.shop] ??= []).push(p);
+  for (const [shop, ps] of Object.entries(byShop)) {
+    const sub = ps.reduce((a, p) => a + p.price, 0);
+    const counts = ps.some(p => p.price >= 1000);
+    const head = document.createElement("tr");
+    head.className = "shop-head";
+    head.innerHTML = `<td colspan="5">🏪 ${esc(shop)} <span class="muted">小計 ${yen(sub)}</span></td>
+      <td colspan="2">${counts ? '<span class="badge ok">カウント対象</span>' : `<span class="badge bad">カウント外</span> <span class="note">1注文1,000円以上にする(あと${yen(1000 - Math.max(...ps.map(p => p.price)))})</span>`}</td>`;
+    tb.appendChild(head);
+    for (const p of ps) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(p.item)}</td>
+        <td class="num">${yen(p.price)}</td>
+        <td class="num">${p.ship ? yen(p.ship) : "—"}</td>
+        <td class="num">${p.bonus ? "+" + p.bonus + "%" : "—"}</td>
+        <td><select data-status="${p.id}"><option value="plan"${p.status === "plan" ? " selected" : ""}>検討中</option><option value="bought"${p.status === "bought" ? " selected" : ""}>購入済み</option></select></td>
+        <td>${p.price >= 1000 ? '<span class="badge ok">対象</span>' : '<span class="badge bad">対象外</span>'}</td>
+        <td><button class="btn small danger" data-del="${p.id}">削除</button></td>`;
+      tb.appendChild(tr);
+    }
+  }
+  const shopsAll = [...new Set(data.purchases.map(p => p.shop))];
+  document.getElementById("shopList").innerHTML = shopsAll.map(x => `<option value="${esc(x)}">`).join("");
+  renderPlanner(st);
+}
+
+// 完走プランナー: 店数を1つ増やすごとに過去購入分へ付く上乗せポイント(上限考慮)を試算する
+function renderPlanner(st) {
+  const el = document.getElementById("planner");
+  const s = data.settings;
+  if (!st.eligible.length) { el.innerHTML = '<p class="note">1,000円以上の注文を追加すると、店数を増やす価値がここに表示されます。</p>'; return; }
+  if (st.shopCount >= 10) { el.innerHTML = '<p class="note">🎉 10店舗完走済み! これ以上店数を増やしても倍率は上がりません。あとは本当に必要で安いものだけ買いましょう。</p>'; return; }
+
+  const ptsAt = k => Math.min(s.cap, Math.floor(st.baseExcl * Math.min(9, k - 1) / 100));
+  let rows = "", prev = st.kaimawariPt;
+  for (let k = st.shopCount + 1; k <= 10; k++) {
+    const gain = ptsAt(k) - prev;
+    rows += `<tr><td>${k}店舗目</td><td class="num">+${pt(gain)}</td><td class="num">累計 +${pt(ptsAt(k) - st.kaimawariPt)}</td></tr>`;
+    prev = ptsAt(k);
+  }
+  const total = ptsAt(10) - st.kaimawariPt;
+
+  // 埋め方の候補: 在庫が少ない順に、まだリストにない消耗品を提案
+  const inList = data.purchases.map(p => p.item).join(" ");
+  const cands = data.items
+    .filter(it => monthsLeft(it) < 2 && !inList.includes(it.name))
+    .sort((a, b) => monthsLeft(a) - monthsLeft(b)).slice(0, 6);
+  const candHtml = cands.length
+    ? "埋め方の候補(在庫が少ない順): " + cands.map(it => {
+        const p = it.refSuper || it.refAmazon;
+        return `<span class="badge info">${esc(it.name)} 残り${monthsLeft(it).toFixed(1)}ヶ月${p ? "・参考" + yen(p) : ""}</span>`;
+      }).join(" ")
+    : "埋め方の候補: ストックに「そろそろ」「買い時」の品がありません。無理に店数を稼ぐ必要はありません。";
+
+  el.innerHTML = `
+    <p>いま<b>${st.shopCount}店舗</b>。あと<b>${10 - st.shopCount}店</b>で完走です。1,000円以上買う店を1つ増やすごとに、<b>過去の購入分</b>に以下が上乗せされます(その店で買う商品自体のポイントは別途)。</p>
+    <div class="table-wrap"><table><thead><tr><th>店数</th><th class="num">過去分への上乗せ</th><th class="num"></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p>完走まで埋めると合計 <b>+${pt(total)}</b>${st.capped || ptsAt(10) >= s.cap ? ' <span class="badge bad">上限あり注意</span>' : ""}。1店あたりの上乗せが商品の割高分より大きいなら「必需品で埋める」価値があります。</p>
+    <p class="note">${candHtml}</p>`;
+}
+
+document.querySelector("#cartTable").addEventListener("click", e => {
+  const del = e.target.dataset.del;
+  if (del) {
+    const p = data.purchases.find(x => x.id === del);
+    if (confirm(`「${p.item}」(${p.shop})をリストから削除しますか?`)) { data.purchases = data.purchases.filter(x => x.id !== del); save(); renderAll(); }
+  }
+});
+document.querySelector("#cartTable").addEventListener("change", e => {
+  const id = e.target.dataset.status;
+  if (id) { const p = data.purchases.find(x => x.id === id); p.status = e.target.value; save(); renderAll(); }
+});
+
+document.getElementById("btnFinishMarathon").addEventListener("click", () => {
+  if (!data.purchases.length) { alert("リストが空です"); return; }
+  const bought = data.purchases.filter(p => p.status === "bought");
+  const st = calcState(bought, data.settings);
+  if (!confirm(`購入済み${bought.length}件(検討中の行は破棄)を履歴に保存して、リストを空にします。よろしいですか?`)) return;
+  // ストック在庫への反映(品名がストック名を含む購入について確認)
+  for (const it of data.items) {
+    const hits = bought.filter(p => p.item.includes(it.name));
+    if (hits.length) {
+      const add = prompt(`「${it.name}」を今回いくつ買いましたか? 在庫に加算します(加算しない場合は0)`, "1");
+      const n = parseFloat(add);
+      if (n > 0) it.qty += n;
+    }
+  }
+  // 各購入の「実質価格」(その商品自体につくポイントを引いた額)を記録しておく → 底値記録に使う
+  const s2 = data.settings;
+  const scale = st.kaimawariRaw > 0 ? st.kaimawariPt / st.kaimawariRaw : 0; // 上限で頭打ちの場合は比例配分
+  for (const p of bought) {
+    const ex = excl(p.price);
+    const kai = p.price >= 1000 ? Math.floor(ex * st.rate / 100) * scale : 0;
+    const other = Math.floor(ex * (1 + s2.spu + (s2.goZeroOn ? s2.goZero : 0) + (p.bonus || 0)) / 100);
+    p.effective = Math.round(p.price + (p.ship || 0) - (kai + other) * s2.ptValue);
+  }
+  data.history.push({ date: new Date().toLocaleDateString("ja-JP"), dateISO: new Date().toISOString().slice(0, 10), purchases: bought, summary: { shopCount: st.shopCount, totalIncl: st.totalIncl, totalPt: st.totalPt, kaimawariPt: st.kaimawariPt } });
+  data.purchases = [];
+  save(); renderAll();
+  alert("履歴に保存しました。ポイントの付与は翌月15日頃、期間限定ポイントの期限に注意してください!");
+});
+
+/* ================= 買うべきか判定 ================= */
+function renderJudgeContext() {
+  const st = calcState(data.purchases, data.settings);
+  document.getElementById("judgeContext").innerHTML = `
+    ${stat("対象ショップ数", `${st.shopCount}<small> / 10店</small>`)}
+    ${stat("次の新しい店で買うと", `${Math.min(10, st.shopCount + 1)}倍<small>に上がる</small>`)}
+    ${stat("これまでの対象購入(税抜)", yen(st.baseExcl))}
+    ${stat("買いまわり残り枠", `${pt(Math.max(0, data.settings.cap - st.kaimawariPt))}`)}
+  `;
+  const sel = document.getElementById("jdShop");
+  const cur = sel.value;
+  const shops = [...new Set(data.purchases.map(p => p.shop))];
+  sel.innerHTML = `<option value="__new__">新しい店(店数+1)</option>` + shops.map(x => `<option value="${esc(x)}">${esc(x)}(購入済みの店)</option>`).join("");
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+/* --- 楽天商品検索API(2026年新仕様: アプリケーションID + アクセスキーが必要) --- */
+let pendingShop = ""; // API検索結果から選んだショップ名(リスト追加時の初期値に使う)
+
+document.getElementById("btnRakutenSearch").addEventListener("click", async () => {
+  const appId = (data.settings.rakutenAppId || "").trim();
+  const accessKey = (data.settings.rakutenAccessKey || "").trim();
+  const kw = val("jdName").trim();
+  const box = document.getElementById("rkResults");
+  if (!appId || !accessKey) { box.innerHTML = '<p class="note">⚙設定タブで「楽天アプリケーションID」と「アクセスキー(pk_...)」の両方を設定すると、楽天内の最安値を自動検索できます(無料)。</p>'; return; }
+  if (!kw) { alert("品名を入れてください"); return; }
+  box.innerHTML = '<p class="note">🔍 検索中...</p>';
+  try {
+    const q = new URLSearchParams({ applicationId: appId, accessKey: accessKey, keyword: kw, hits: "8", sort: "+itemPrice", availability: "1", format: "json", formatVersion: "2" });
+    const resp = await fetch("https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?" + q.toString());
+    const text = await resp.text();
+    let res = {};
+    try { res = text ? JSON.parse(text) : {}; } catch (_) {}
+    if (resp.status === 403) throw new Error("アクセスが拒否されました(403)。ID/キーの誤りか、「許可されたウェブサイト」制限が原因です");
+    if (!resp.ok) throw new Error(res.error_description || res.error || "HTTP " + resp.status);
+    if (res.error) throw new Error(res.error_description || res.error);
+    const items = (res.Items || []).map(x => x.Item ? x.Item : x); // レスポンス形式の新旧どちらにも対応
+    if (!items.length) { box.innerHTML = '<p class="note">見つかりませんでした。キーワードを短くする・メーカー名を入れる等を試してください。</p>'; return; }
+    box.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th class="num">価格(税込)</th><th>送料</th><th>商品名</th><th>ショップ</th><th></th></tr></thead>
+      <tbody>${items.map((it, i) => `<tr>
+        <td class="num"><b>${yen(it.itemPrice)}</b></td>
+        <td>${it.postageFlag === 0 ? '<span class="badge ok">送料込</span>' : '<span class="badge warn">送料別</span>'}</td>
+        <td><a href="${esc(it.itemUrl)}" target="_blank" title="${esc(it.itemName)}">${esc(String(it.itemName).slice(0, 42))}${String(it.itemName).length > 42 ? "…" : ""}</a></td>
+        <td class="note">${esc(it.shopName || "")}</td>
+        <td><button class="btn small" data-rk="${i}">この価格で判定</button></td></tr>`).join("")}</tbody></table></div>
+      <p class="note">楽天商品検索APIの結果を安い順に表示。「送料別」の商品は送料欄に手動で足してください。内容量(サイズ)は商品名で必ず確認を!</p>`;
+    box.querySelectorAll("[data-rk]").forEach(b => b.addEventListener("click", () => {
+      const it = items[+b.dataset.rk];
+      document.getElementById("jdPrice").value = it.itemPrice;
+      pendingShop = it.shopName || "";
+      document.getElementById("jdShop").value = "__new__";
+      document.getElementById("btnJudge").click();
+    }));
+  } catch (e) {
+    const hint = e.name === "TypeError"
+      ? "楽天側の「許可されたウェブサイト」制限で、ローカルファイルからのアクセスが拒否された可能性が高いです。GitHub Pages等での公開(スマホ対応も兼ねる)で解決できます。"
+      : "アプリケーションIDとアクセスキーが正しいか(取得直後は反映まで時間がかかることがあります)、通信環境を確認してください。";
+    box.innerHTML = `<p class="note">検索に失敗しました: ${esc(e.message)}。${hint}</p>`;
+  }
+});
+
+document.getElementById("jdName").addEventListener("input", () => {
+  const name = val("jdName").trim();
+  const it = data.items.find(i => i.name === name);
+  if (it) {
+    if (it.refSuper) document.getElementById("jdRefSuper").value = it.refSuper;
+    if (it.refAmazon) document.getElementById("jdRefAmazon").value = it.refAmazon;
+    if (it.refAmount) document.getElementById("jdRefAmount").value = it.refAmount;
+  }
+  document.getElementById("jdLinks").innerHTML = name
+    ? `価格を確認: <a href="${amazonUrl(name)}" target="_blank">Amazonで「${esc(name)}」を検索</a> ｜ <a href="https://keepa.com/#!search/5-${encodeURIComponent(name)}" target="_blank">Keepaで価格推移を見る</a> ｜ <a href="${rakutenSearchUrl(name)}" target="_blank">楽天で安い順に検索</a>`
+    : "";
+});
+
+document.getElementById("btnJudge").addEventListener("click", () => {
+  const price = num("jdPrice");
+  if (!price) { alert("楽天の価格を入れてください"); return; }
+  const s = data.settings;
+  const shopSel = val("jdShop");
+  const cand = {
+    id: "cand", item: val("jdName") || "候補商品", price, ship: num("jdShip"), bonus: num("jdBonus"), amount: num("jdAmount"),
+    shop: shopSel === "__new__" ? "__新しい店__" : shopSel, status: "plan"
+  };
+  const r = judgeCandidate(cand, data.purchases, s);
+  const stockIt = data.items.find(i => i.name === val("jdName").trim());
+  const unit = stockIt && stockIt.unit ? stockIt.unit : "";
+  const refSuper = num("jdRefSuper"), refAmazon = num("jdRefAmazon");
+  const jdAmt = num("jdAmount"), refAmt = num("jdRefAmount");
+  const scaled = jdAmt > 0 && refAmt > 0;             // 内容量が両方あれば同じ量に換算して比較する
+  const factor = scaled ? jdAmt / refAmt : 1;
+  const refs = [];
+  if (refSuper > 0) refs.push({ label: "スーパー等", price: refSuper, comp: Math.round(refSuper * factor) });
+  if (refAmazon > 0) refs.push({ label: "Amazon", price: refAmazon, comp: Math.round(refAmazon * factor) });
+  const cheapest = refs.length ? refs.reduce((a, b) => a.comp <= b.comp ? a : b) : null;
+  const ref = cheapest ? cheapest.comp : 0;
+  const name = esc(cand.item);
+  const isNew = shopSel === "__new__";
+
+  let rows = `
+    <tr><td>支払額(送料込)</td><td class="num">${yen(r.pay)}</td></tr>
+    <tr><td>① この商品につくポイント</td><td class="num">${pt(r.itemPt)} <span class="note">(通常+SPU等 ${pt(r.itemOtherPt)} + 買いまわり ${pt(r.itemKaimawari)})</span></td></tr>
+    <tr><th>実質価格(①だけで計算)</th><th class="num" style="font-size:16px">${yen(r.effective)}${jdAmt > 0 ? ` <span class="note">= 100${esc(unit) || "単位"}あたり ¥${(r.effective / jdAmt * 100).toFixed(1)}</span>` : ""}</th></tr>`;
+  for (const rf of refs) {
+    const diff = r.effective - rf.comp;
+    rows += `<tr><td>${rf.label}の価格</td><td class="num">${yen(rf.price)}${scaled ? ` <span class="note">(${jdAmt}${esc(unit)}分に換算 ${yen(rf.comp)})</span>` : ""} <b>${diff <= 0 ? "→ " + yen(-diff) + " お得" : "→ " + yen(diff) + " 割高"}</b></td></tr>`;
+  }
+  const bp = bottomPrice(val("jdName").trim());
+  if (bp) {
+    const bdiff = r.effective - bp.eff;
+    rows += `<tr><td>過去の底値(実質)</td><td class="num">${yen(bp.eff)} <span class="note">(${esc(bp.date)})</span> <b>${bdiff <= 0 ? "→ 底値更新!" : "→ 底値より" + yen(bdiff) + "高い"}</b></td></tr>`;
+  }
+
+  let extra = "";
+  if (isNew && r.retroPt > 0) {
+    extra = `<p>② さらに、この店で1,000円以上買うと店数が増え、<b>過去の購入分に +${pt(r.retroPt)} の押し上げ効果</b>があります。これは<u>この店で何を買っても発生する</u>ので、商品の安さの判定には入れていません。</p>`;
+  }
+  if (cand.price < 1000) {
+    extra += `<p>⚠ 商品代が税込1,000円未満なので、<b>店数にカウントされず、買いまわりボーナスも付きません</b>。あと${yen(1000 - cand.price)}足すとカウント対象になります。</p>`;
+  }
+  if (r.after.capped) {
+    extra += `<p>⚠ 買いまわりボーナスが<b>上限(${pt(s.cap)})に到達</b>しています。これ以上買っても買いまわり分は増えません。</p>`;
+  }
+
+  let cls, title;
+  if (!ref) { cls = "hold"; title = "スーパー等かAmazonの価格を入れると損得判定ができます"; }
+  else if (r.effective <= ref) { cls = "buy"; title = `✅ 買い! 実質${yen(r.effective)}で、最安の${cheapest.label}(${scaled ? "換算" : ""}${yen(ref)})より${yen(ref - r.effective)}お得`; }
+  else if (isNew && r.retroPt * s.ptValue >= (r.effective - ref)) {
+    cls = "hold"; title = `🤔 商品単体では${cheapest.label}より${yen(r.effective - ref)}割高。ただし店数を増やす目的なら押し上げ効果(+${pt(r.retroPt)})で元は取れる`;
+  }
+  else { cls = "skip"; title = `❌ 見送り推奨。実質${yen(r.effective)}で、最安の${cheapest.label}(${scaled ? "換算" : ""}${yen(ref)})より${yen(r.effective - ref)}割高(押し上げ効果を足しても届きません)`; }
+
+  document.getElementById("judgeResult").innerHTML = `
+    <div class="verdict ${cls}">
+      <h3>${title}</h3>
+      <div class="note">${name} / ${isNew ? "新しい店(店数" + r.before.shopCount + "→" + r.after.shopCount + ")" : "購入済みの店(店数そのまま)"} / 適用倍率: 通常1%+SPU等${s.spu}%${s.goZeroOn ? "+5と0の日" + s.goZero + "%" : ""}${cand.bonus ? "+店独自" + cand.bonus + "%" : ""}+買いまわり${r.after.rate}%</div>
+      <table>${rows}</table>
+      ${extra}
+      <button class="btn primary" id="btnJudgeToCart">この内容で買い物リストに追加</button>
+    </div>`;
+
+  document.getElementById("btnJudgeToCart").addEventListener("click", () => {
+    const shop = isNew ? (prompt("ショップ名を入れてください", pendingShop) || "").trim() : cand.shop;
+    if (!shop) return;
+    data.purchases.push({ ...cand, id: uid(), shop });
+    save(); renderAll(); switchTab("cart");
+  });
+});
+
+/* ================= 履歴 ================= */
+function parseHistDate(h) {
+  if (h.dateISO) return new Date(h.dateISO);
+  const m = String(h.date).match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+const fmtDate = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+
+function renderPointCalendar() {
+  const el = document.getElementById("pointCalendar");
+  if (!data.history.length) { el.innerHTML = '<p class="note">履歴が保存されると、付与予定日と失効日がここに表示されます。</p>'; return; }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const rows = data.history.slice().reverse().map(h => {
+    const d = parseHistDate(h);
+    if (!d) return "";
+    const grant = new Date(d.getFullYear(), d.getMonth() + 1, 15);          // 翌月15日頃に付与
+    const expiry = new Date(grant.getFullYear(), grant.getMonth() + 2, 0);  // 付与月の翌月末に失効
+    const ptShow = h.summary.kaimawariPt != null ? h.summary.kaimawariPt : h.summary.totalPt;
+    let badge;
+    if (today > expiry) badge = '<span class="badge" style="background:#e5e7eb;color:#6b7280">失効済み</span>';
+    else if (today < grant) badge = '<span class="badge info">付与待ち</span>';
+    else if ((expiry - today) / 86400000 <= 30) badge = '<span class="badge bad">⚠ 30日以内に失効!</span>';
+    else badge = '<span class="badge ok">利用可能</span>';
+    return `<tr><td>${esc(h.date)}のマラソン</td><td class="num">約${pt(ptShow)}</td><td>${fmtDate(grant)}頃</td><td>${fmtDate(expiry)}</td><td>${badge}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>開催</th><th class="num">買いまわり分</th><th>付与予定</th><th>失効日</th><th>状態</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <p class="note">付与日は目安(公式発表は「翌月15日頃」)。SPU等の一部にも期間限定ポイントがあります。正確な残高は楽天PointClubで確認してください。</p>`;
+}
+
+function renderHistory() {
+  renderPointCalendar();
+  const el = document.getElementById("historyList");
+  if (!data.history.length) { el.innerHTML = '<p class="note">まだ履歴がありません。「買い物リスト」タブでマラソンを終了すると、ここに保存されます。</p>'; return; }
+  el.innerHTML = data.history.slice().reverse().map((h, idx) => `
+    <details style="margin-bottom:10px">
+      <summary style="cursor:pointer"><b>${esc(h.date)}</b> — ${h.summary.shopCount}店 / ${yen(h.summary.totalIncl)} / 獲得${pt(h.summary.totalPt)}</summary>
+      <div class="table-wrap"><table>
+        <thead><tr><th>ショップ</th><th>内容</th><th class="num">商品代</th><th class="num">送料</th><th class="num">実質価格</th></tr></thead>
+        <tbody>${h.purchases.map(p => `<tr><td>${esc(p.shop)}</td><td>${esc(p.item)}</td><td class="num">${yen(p.price)}</td><td class="num">${p.ship ? yen(p.ship) : "—"}</td><td class="num">${p.effective != null ? yen(p.effective) : "—"}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </details>`).join("");
+}
+
+document.getElementById("btnCsv").addEventListener("click", () => {
+  if (!data.history.length) { alert("履歴がありません"); return; }
+  const escCsv = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const lines = ["マラソン開催日,ショップ,内容,商品代(税込),送料,実質価格"];
+  for (const h of data.history) for (const p of h.purchases)
+    lines.push([h.date, p.shop, p.item, p.price, p.ship || 0, p.effective != null ? p.effective : ""].map(escCsv).join(","));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv" }); // 先頭のBOMでExcelの文字化けを防ぐ
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "rakuten-history-" + new Date().toISOString().slice(0, 10) + ".csv";
+  a.click();
+});
+
+/* ================= 設定 ================= */
+function renderSettings() {
+  const s = data.settings;
+  document.getElementById("setCap").value = s.cap;
+  document.getElementById("setSpu").value = s.spu;
+  document.getElementById("setGoZero").value = s.goZero;
+  document.getElementById("setGoZeroOn").value = s.goZeroOn;
+  document.getElementById("setPtValue").value = s.ptValue;
+  document.getElementById("setAppId").value = s.rakutenAppId || "";
+  document.getElementById("setAccessKey").value = s.rakutenAccessKey || "";
+}
+document.getElementById("btnSaveSettings").addEventListener("click", () => {
+  data.settings = { cap: num("setCap"), spu: num("setSpu"), goZero: num("setGoZero"), goZeroOn: parseInt(val("setGoZeroOn")), ptValue: num("setPtValue") || 1, rakutenAppId: val("setAppId").trim(), rakutenAccessKey: val("setAccessKey").trim() };
+  save(); renderAll();
+  alert("保存しました");
+});
+document.getElementById("btnReset").addEventListener("click", () => {
+  if (confirm("本当に全データ(ストック・買い物リスト・履歴)を削除しますか?")) {
+    if (confirm("最終確認: この操作は元に戻せません。削除しますか?")) {
+      localStorage.removeItem(STORE_KEY); data = defaultData(); renderAll();
+    }
+  }
+});
+
+/* ================= 書き出し/読み込み ================= */
+document.getElementById("btnExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "stock-data-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+});
+document.getElementById("btnImport").addEventListener("click", () => document.getElementById("fileImport").click());
+document.getElementById("fileImport").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!confirm("現在のデータを読み込んだデータで上書きします。よろしいですか?")) return;
+      data = Object.assign(defaultData(), d);
+      save(); renderAll();
+      alert("読み込みました");
+    } catch (err) { alert("ファイルを読み込めませんでした: " + err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+});
+
+/* ================= 共通 ================= */
+function val(id) { return document.getElementById(id).value; }
+function num(id) { return parseFloat(document.getElementById(id).value) || 0; }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function stat(label, valueHtml) { return `<div class="stat"><div class="label">${label}</div><div class="value">${valueHtml}</div></div>`; }
+function amazonUrl(name) { return "https://www.amazon.co.jp/s?k=" + encodeURIComponent(name); }
+function rakutenSearchUrl(name) { return "https://search.rakuten.co.jp/search/mall/" + encodeURIComponent(name) + "/?s=2"; } // s=2 は価格の安い順
+function switchTab(name) {
+  document.querySelector(`#tabs button[data-tab="${name}"]`).click();
+}
+function renderAll() { renderStock(); renderCart(); renderJudgeContext(); renderHistory(); renderSettings(); }
+applyAutoDecay();
+renderAll();
+</script>
+</body>
+</html>
