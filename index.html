@@ -250,6 +250,7 @@
       <label class="fld"><b>どの店で買う?</b><select id="jdShop"></select></label>
       <button class="btn primary" id="btnJudge">判定する</button>
       <button class="btn" id="btnRakutenSearch">🔍 楽天の最安を自動検索</button>
+      <label class="fld"><b>検索の下限価格</b><input id="jdMinPrice" type="number" min="0" value="300" style="width:90px" title="安い順検索に混ざる1円のダミー商品などを除外します"></label>
     </div>
     <datalist id="itemList2"></datalist>
     <div id="rkResults"></div>
@@ -663,18 +664,44 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
   const box = document.getElementById("rkResults");
   if (!appId || !accessKey) { box.innerHTML = '<p class="note">⚙設定タブで「楽天アプリケーションID」と「アクセスキー(pk_...)」の両方を設定すると、楽天内の最安値を自動検索できます(無料)。</p>'; return; }
   if (!kw) { alert("品名を入れてください"); return; }
-  box.innerHTML = '<p class="note">🔍 検索中...</p>';
-  try {
-    const q = new URLSearchParams({ applicationId: appId, accessKey: accessKey, keyword: kw, hits: "8", sort: "+itemPrice", availability: "1", format: "json", formatVersion: "2" });
+  box.innerHTML = '<p class="note">🔍 検索中...(数秒かかることがあります)</p>';
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function rkTry(params) {
+    const q = new URLSearchParams(params);
     const resp = await fetch("https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?" + q.toString());
     const text = await resp.text();
-    let res = {};
-    try { res = text ? JSON.parse(text) : {}; } catch (_) {}
-    if (resp.status === 403) throw new Error("アクセスが拒否されました(403)。ID/キーの誤りか、「許可されたウェブサイト」制限が原因です");
-    if (!resp.ok) throw new Error(res.error_description || res.error || "HTTP " + resp.status);
-    if (res.error) throw new Error(res.error_description || res.error);
-    const items = (res.Items || []).map(x => x.Item ? x.Item : x); // レスポンス形式の新旧どちらにも対応
-    if (!items.length) { box.innerHTML = '<p class="note">見つかりませんでした。キーワードを短くする・メーカー名を入れる等を試してください。</p>'; return; }
+    let res = {}; try { res = text ? JSON.parse(text) : {}; } catch (_) {}
+    return { status: resp.status, ok: resp.ok && !res.error, res };
+  }
+  try {
+    // 何度か形を変えて試す(混雑や未対応パラメータによる失敗の自動回避 兼 診断)
+    const baseP = { applicationId: appId, accessKey: accessKey, keyword: kw, format: "json" };
+    const variants = [
+      { label: "標準", p: { ...baseP, hits: "30", sort: "+itemPrice", availability: "1", formatVersion: "2" } },
+      { label: "軽量", p: { ...baseP, hits: "8", sort: "+itemPrice", availability: "1", formatVersion: "2" } },
+      { label: "最小", p: baseP },
+    ];
+    let got = null;
+    const attempts = [];
+    for (const v of variants) {
+      const r = await rkTry(v.p);
+      attempts.push(`${v.label}: HTTP ${r.status}${r.res.error ? "(" + (r.res.error_description || r.res.error) + ")" : ""}`);
+      if (r.ok) { got = r.res; break; }
+      if (r.status === 403) break; // 認証系の失敗は形を変えても通らないので即終了
+      await sleep(2500);
+    }
+    if (!got) {
+      if (attempts.some(a => a.includes("403"))) throw new Error("アクセスが拒否されました(403)。ID/キーの誤りか、「許可されたウェブサイト」制限が原因です");
+      throw new Error("すべての方式で失敗 → " + attempts.join(" ／ "));
+    }
+    const minP = num("jdMinPrice");
+    const ngWords = ["中古", "レンタル落ち", "見積", "サンプル"];
+    const items = (got.Items || []).map(x => x.Item ? x.Item : x) // レスポンス形式の新旧どちらにも対応
+      .filter(it => (it.itemPrice || 0) >= minP)                  // 下限価格でダミー商品を足切り
+      .filter(it => !ngWords.some(w => String(it.itemName || "").includes(w)))
+      .sort((a, b) => (a.itemPrice || 0) - (b.itemPrice || 0))    // 並び順もアプリ側で保証
+      .slice(0, 8);
+    if (!items.length) { box.innerHTML = '<p class="note">条件に合う商品が見つかりませんでした。「検索の下限価格」を下げる、キーワードを変える等を試してください。</p>'; return; }
     box.innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th class="num">価格(税込)</th><th>送料</th><th>商品名</th><th>ショップ</th><th></th></tr></thead>
       <tbody>${items.map((it, i) => `<tr>
@@ -692,9 +719,9 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
       document.getElementById("btnJudge").click();
     }));
   } catch (e) {
-    const hint = e.name === "TypeError"
-      ? "楽天側の「許可されたウェブサイト」制限で、ローカルファイルからのアクセスが拒否された可能性が高いです。GitHub Pages等での公開(スマホ対応も兼ねる)で解決できます。"
-      : "アプリケーションIDとアクセスキーが正しいか(取得直後は反映まで時間がかかることがあります)、通信環境を確認してください。";
+    let hint = "アプリケーションIDとアクセスキーが正しいか(取得直後は反映まで時間がかかることがあります)、通信環境を確認してください。";
+    if (e.name === "TypeError") hint = "楽天側の「許可されたウェブサイト」制限で、ローカルファイルからのアクセスが拒否された可能性が高いです。GitHub Pages等での公開(スマホ対応も兼ねる)で解決できます。";
+    else if (String(e.message).includes("503") || String(e.message).includes("429")) hint = "楽天側の一時的な混雑か、連続アクセスの制限です。10秒ほど待ってからもう一度押してみてください。";
     box.innerHTML = `<p class="note">検索に失敗しました: ${esc(e.message)}。${hint}</p>`;
   }
 });
