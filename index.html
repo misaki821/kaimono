@@ -667,12 +667,15 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
   const kw = val("jdName").trim();
   const box = document.getElementById("rkResults");
   if (!appId || !accessKey) { box.innerHTML = '<p class="note">⚙設定タブで「楽天アプリケーションID」と「アクセスキー(pk_...)」の両方を設定すると、楽天内の最安値を自動検索できます(無料)。</p>'; return; }
+  if (location.protocol === "file:") { box.innerHTML = '<p class="note">⚠ ローカルファイル(ダブルクリックで開いた画面)からは、楽天APIの「許可されたウェブサイト」確認に必要な情報(Referer)が送れないため検索できません。<a href="https://misaki821.github.io/kaimono/" target="_blank">公開サイト</a>を開いて、そちらの⚙設定タブにキーを入れてから検索してください。</p>'; return; }
   if (!kw) { alert("品名を入れてください"); return; }
   box.innerHTML = '<p class="note">🔍 検索中...(数秒かかることがあります)</p>';
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   async function rkTry(params) {
     const q = new URLSearchParams(params);
-    const resp = await fetch("https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?" + q.toString());
+    // 「許可されたウェブサイト」の照合に使われるRefererを明示的に送る(プライバシー設定等で消されるのを防ぐ)
+    const resp = await fetch("https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?" + q.toString(),
+      { referrer: location.href, referrerPolicy: "unsafe-url" });
     const text = await resp.text();
     let res = {}; try { res = text ? JSON.parse(text) : {}; } catch (_) {}
     return { status: resp.status, ok: resp.ok && !res.error && !res.errors, res };
@@ -725,6 +728,7 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
     let hint = "アプリケーションIDとアクセスキーが正しいか(取得直後は反映まで時間がかかることがあります)、通信環境を確認してください。";
     if (e.name === "TypeError") hint = "楽天側の「許可されたウェブサイト」制限で、ローカルファイルからのアクセスが拒否された可能性が高いです。GitHub Pages等での公開(スマホ対応も兼ねる)で解決できます。";
     else if (String(e.message).includes("Invalid Access Key")) hint = "アクセスキー(pk_...)が楽天側の発行値と一致していません。楽天ウェブサービスのアプリ情報ページでアクセスキーをコピーし直し、⚙設定タブに貼り直して保存してください(前後に空白が入っていないか注意)。";
+    else if (String(e.message).includes("REFERRER")) hint = "アクセス元サイトの情報(Referer)が楽天に届いていません。公開サイト(https://misaki821.github.io/kaimono/)から実行しているか確認してください。公開サイトでもこのエラーが出る場合は、ブラウザのプライバシー設定や広告ブロック拡張機能がRefererを消していないか確認を。";
     else if (String(e.message).includes("503") || String(e.message).includes("429")) hint = "楽天側の一時的な混雑か、連続アクセスの制限です。10秒ほど待ってからもう一度押してみてください。";
     box.innerHTML = `<p class="note">検索に失敗しました: ${esc(e.message)}。${hint}</p>`;
   }
