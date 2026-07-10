@@ -6,8 +6,9 @@
 ## ファイル構成と運用（変更しないこと）
 
 - **このフォルダの `index.html` がマスター（正）**。公開版はそのコピー
-- 公開先: https://misaki821.github.io/kaimono/ （GitHubリポジトリ: misaki821/kaimono）
-- 修正 → 動作確認 → git commit → GitHub へ反映、の順を守る
+- 公開先: https://misaki821.github.io/kaimono/ （GitHubリポジトリ: misaki821/kaimono、originとして接続済み）
+- 修正 → 動作確認チェックリスト → `git commit` → `git push`（1〜2分で公開URLに反映）、の順を守る
+- 壊れたときは `git log` で履歴を確認し、直前の正常なコミットに戻せる
 - `index.html` を分割・リネームしない（ダブルクリックで開ける単一ファイル構成を維持する）
 
 ## 判定ロジックの絶対ルール（このアプリの肝・壊さないこと）
