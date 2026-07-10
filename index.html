@@ -675,7 +675,7 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
     const resp = await fetch("https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?" + q.toString());
     const text = await resp.text();
     let res = {}; try { res = text ? JSON.parse(text) : {}; } catch (_) {}
-    return { status: resp.status, ok: resp.ok && !res.error, res };
+    return { status: resp.status, ok: resp.ok && !res.error && !res.errors, res };
   }
   try {
     // 何度か形を変えて試す(未対応パラメータや混雑による失敗の自動回避 兼 診断)
@@ -691,7 +691,8 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
     const attempts = [];
     for (const v of variants) {
       const r = await rkTry(v.p);
-      attempts.push(`${v.label}: HTTP ${r.status}${r.res.error ? "(" + (r.res.error_description || r.res.error) + ")" : ""}`);
+      const emsg = r.res.error_description || r.res.error || (r.res.errors && (r.res.errors.errorMessage || r.res.errors.errorCode)) || "";
+      attempts.push(`${v.label}: HTTP ${r.status}${emsg ? "(" + emsg + ")" : ""}`);
       if (r.ok) { got = r.res; break; }
       await sleep(2500);
     }
@@ -723,6 +724,7 @@ document.getElementById("btnRakutenSearch").addEventListener("click", async () =
   } catch (e) {
     let hint = "アプリケーションIDとアクセスキーが正しいか(取得直後は反映まで時間がかかることがあります)、通信環境を確認してください。";
     if (e.name === "TypeError") hint = "楽天側の「許可されたウェブサイト」制限で、ローカルファイルからのアクセスが拒否された可能性が高いです。GitHub Pages等での公開(スマホ対応も兼ねる)で解決できます。";
+    else if (String(e.message).includes("Invalid Access Key")) hint = "アクセスキー(pk_...)が楽天側の発行値と一致していません。楽天ウェブサービスのアプリ情報ページでアクセスキーをコピーし直し、⚙設定タブに貼り直して保存してください(前後に空白が入っていないか注意)。";
     else if (String(e.message).includes("503") || String(e.message).includes("429")) hint = "楽天側の一時的な混雑か、連続アクセスの制限です。10秒ほど待ってからもう一度押してみてください。";
     box.innerHTML = `<p class="note">検索に失敗しました: ${esc(e.message)}。${hint}</p>`;
   }
