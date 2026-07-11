@@ -276,14 +276,14 @@
       <label class="fld"><b>品名</b><input id="stName" placeholder="例: 洗濯洗剤 詰替"></label>
       <label class="fld"><b>カテゴリ</b><select id="stCat" style="width:130px"><option value="">なし</option></select></label>
       <label class="fld"><b>在庫数</b><input id="stQty" type="number" min="0" step="0.5" value="0" style="width:80px"></label>
-      <label class="fld"><b>1ヶ月に使う量</b><input id="stUse" type="number" min="0" step="0.1" value="1" style="width:90px"></label>
+      <label class="fld"><b>1ヶ月に使う量(目安でOK)</b><input id="stUse" type="number" min="0" step="0.1" value="1" style="width:110px"></label>
       <label class="fld"><b>1個の内容量※</b><input id="stAmount" type="number" min="0" value="" placeholder="例: 800" style="width:90px"></label>
       <label class="fld"><b>単位</b><input id="stUnit" placeholder="ml/枚/回" style="width:70px"></label>
       <label class="fld"><b>スーパー等の価格(税込)※</b><input id="stRefSuper" type="number" min="0" value="" placeholder="例: 398" style="width:110px"></label>
       <label class="fld"><b>Amazon価格(税込)※</b><input id="stRefAmazon" type="number" min="0" value="" placeholder="例: 425" style="width:110px"></label>
       <button class="btn primary" id="btnAddStock">追加</button>
     </div>
-    <p class="note">※価格はスーパーやドラッグストアで見た値段(手動でメモ)とAmazonの値段。「内容量」はその価格の1個分の量(例: 詰替800ml)。楽天はサイズ違いが多いので、内容量を入れると「100mlあたり」の単価で正しく比較できます。Amazon価格は一覧の🔍リンクからすぐ確認できます。カテゴリの選択肢は⚙設定タブで管理できます。</p>
+    <p class="note">※価格はスーパーやドラッグストアで見た値段(手動でメモ)とAmazonの値段。「内容量」はその価格の1個分の量(例: 詰替800ml)。楽天はサイズ違いが多いので、内容量を入れると「100mlあたり」の単価で正しく比較できます。Amazon価格は一覧の🔍リンクからすぐ確認できます。カテゴリの選択肢は⚙設定タブで管理できます。<b>使用量は目安でOK</b>— 新しく追加した品目は「自動」ONで登録され、在庫更新の実績がたまると実際の減り方に合わせて自動で補正されていきます(不要なら一覧でOFFにできます)。</p>
   </div>
 
   <div class="card">
@@ -645,7 +645,8 @@ document.getElementById("btnAddStock").addEventListener("click", () => {
   const name = val("stName").trim();
   if (!name) { alert("品名を入れてください"); return; }
   const cat = val("stCat") === "__addnew__" ? "" : val("stCat");
-  data.items.push({ id: uid(), name, cat, qty: num("stQty"), monthlyUse: num("stUse"), refAmount: num("stAmount"), unit: val("stUnit").trim(), refSuper: num("stRefSuper"), refAmazon: num("stRefAmazon"), lastUpdated: new Date().toISOString().slice(0, 10) });
+  // 新規品目は使用量の自動算出ONで登録する(入力値は実績がたまるまでの目安として使われる)
+  data.items.push({ id: uid(), name, cat, qty: num("stQty"), monthlyUse: num("stUse"), autoUse: true, refAmount: num("stAmount"), unit: val("stUnit").trim(), refSuper: num("stRefSuper"), refAmazon: num("stRefAmazon"), lastUpdated: new Date().toISOString().slice(0, 10) });
   ["stName", "stCat", "stAmount", "stUnit", "stRefSuper", "stRefAmazon"].forEach(id => document.getElementById(id).value = "");
   save(); renderAll();
 });
