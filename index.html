@@ -168,8 +168,7 @@
     #stockTable td[data-label="品名"] { grid-column: 1 / 3; font-weight: 700; font-size: 16px; }
     #remindTable td[data-label="品名"] { grid-column: 1 / -1; font-weight: 700; font-size: 16px; }
     #stockTable td[data-label="状態"] { grid-row: 1; grid-column: 3; justify-self: end; }
-    #stockTable td[data-label="カテゴリ"] { grid-column: 1 / -1; font-size: 12px; margin-top: -6px; }
-    #stockTable td[data-label="カテゴリ"]:empty { display: none; }
+    #stockTable td[data-label="カテゴリ"] { grid-column: 1 / -1; }
     #stockTable td[data-label="前回/底値"] { grid-column: 1 / 3; align-self: end; }
     #stockTable td[data-label="操作"] { grid-column: 3; justify-self: end; align-self: end; white-space: nowrap; }
     #remindTable td[data-label="操作"] { grid-column: 1 / -1; display: flex; gap: 8px; }
@@ -205,7 +204,7 @@
 
     /* ラベルを出さないセル(見れば分かるもの) */
     #stockTable td[data-label="品名"]::before, #remindTable td[data-label="品名"]::before,
-    #stockTable td[data-label="状態"]::before, #stockTable td[data-label="カテゴリ"]::before,
+    #stockTable td[data-label="状態"]::before,
     #stockTable td[data-label="操作"]::before, #remindTable td[data-label="操作"]::before,
     #cartTable td[data-label="内容"]::before, #cartTable td[data-label="操作"]::before,
     #ptCalTable td[data-label="開催"]::before, #ptCalTable td[data-label="状態"]::before,
@@ -275,7 +274,7 @@
     <h2>ストック(在庫)を追加 <small>消耗品を登録して、残りどれくらいもつか管理します</small></h2>
     <div class="fields">
       <label class="fld"><b>品名</b><input id="stName" placeholder="例: 洗濯洗剤 詰替"></label>
-      <label class="fld"><b>カテゴリ</b><input id="stCat" placeholder="例: 洗剤" list="catList" style="width:110px"></label>
+      <label class="fld"><b>カテゴリ</b><select id="stCat" style="width:130px"><option value="">なし</option></select></label>
       <label class="fld"><b>在庫数</b><input id="stQty" type="number" min="0" step="0.5" value="0" style="width:80px"></label>
       <label class="fld"><b>1ヶ月に使う量</b><input id="stUse" type="number" min="0" step="0.1" value="1" style="width:90px"></label>
       <label class="fld"><b>1個の内容量※</b><input id="stAmount" type="number" min="0" value="" placeholder="例: 800" style="width:90px"></label>
@@ -284,8 +283,7 @@
       <label class="fld"><b>Amazon価格(税込)※</b><input id="stRefAmazon" type="number" min="0" value="" placeholder="例: 425" style="width:110px"></label>
       <button class="btn primary" id="btnAddStock">追加</button>
     </div>
-    <p class="note">※価格はスーパーやドラッグストアで見た値段(手動でメモ)とAmazonの値段。「内容量」はその価格の1個分の量(例: 詰替800ml)。楽天はサイズ違いが多いので、内容量を入れると「100mlあたり」の単価で正しく比較できます。Amazon価格は一覧の🔍リンクからすぐ確認できます。</p>
-    <datalist id="catList"></datalist>
+    <p class="note">※価格はスーパーやドラッグストアで見た値段(手動でメモ)とAmazonの値段。「内容量」はその価格の1個分の量(例: 詰替800ml)。楽天はサイズ違いが多いので、内容量を入れると「100mlあたり」の単価で正しく比較できます。Amazon価格は一覧の🔍リンクからすぐ確認できます。カテゴリの選択肢は⚙設定タブで管理できます。</p>
   </div>
 
   <div class="card">
@@ -412,6 +410,15 @@
     </p>
   </div>
   <div class="card">
+    <h2>カテゴリ管理 <small>ストックの分類に使うカテゴリを登録します</small></h2>
+    <div class="fields">
+      <label class="fld"><b>新しいカテゴリ</b><input id="setNewCat" placeholder="例: 洗剤" style="width:160px"></label>
+      <button class="btn" id="btnAddCat">追加</button>
+    </div>
+    <div id="catManage" style="margin-top:10px"></div>
+    <p class="note">カテゴリを削除しても、品目に付いているカテゴリ表示はそのまま残ります(新規選択の候補から消えるだけ)。ストック追加画面の「＋新規作成...」からもカテゴリを作れます。</p>
+  </div>
+  <div class="card">
     <h2>データについて</h2>
     <p class="note">データはこのブラウザの中(localStorage)に自動保存されます。パソコンの買い替えやブラウザ変更に備えて、ときどきヘッダーの「データ書き出し」でJSONファイルを保存しておくのがおすすめです。</p>
     <button class="btn danger" id="btnReset">全データを削除する</button>
@@ -430,6 +437,7 @@ const STORE_KEY = "rakuten-stock-app-v1";
 
 const defaultData = () => ({
   settings: { cap: 7000, spu: 2, goZero: 2, goZeroOn: 0, ptValue: 1.0, rakutenAppId: "", rakutenAccessKey: "", ghToken: "", gistId: "" },
+  categories: [], // ストックのカテゴリ一覧(⚙設定タブで管理)
   items: [],      // {id, name, cat, qty, monthlyUse, refSuper, refAmazon, refAmount, unit, lastUpdated}
   purchases: [],  // {id, shop, item, price, ship, bonus, status, amount}
   history: []     // {date, dateISO, purchases(+effective), summary}
@@ -445,10 +453,16 @@ function load() {
     const merged = Object.assign(defaultData(), d, { settings: Object.assign(defaultData().settings, d.settings || {}) });
     // 旧バージョンの refPrice を refSuper に引き継ぎ
     for (const it of merged.items) if (it.refPrice != null && it.refSuper == null) { it.refSuper = it.refPrice; delete it.refPrice; }
+    syncCats(merged);
     return merged;
   } catch (e) { return defaultData(); }
 }
 function save() { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+// カテゴリ一覧の移行/補完: 品目に付いているカテゴリが一覧に無ければ取り込む(旧データ対応)
+function syncCats(d) {
+  if (!Array.isArray(d.categories)) d.categories = [];
+  for (const it of d.items) if (it.cat && !d.categories.includes(it.cat)) d.categories.push(it.cat);
+}
 
 // 在庫確認リマインド: 在庫は自動では減らさない。lastUpdated(前回確認日)からの経過で
 // 「計算上0.5個以上減っていそうな」品目を洗い出し、「減りましたか?」と確認してもらう
@@ -579,7 +593,7 @@ function renderStock() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td data-label="品名">${esc(it.name)}</td>
-      <td class="muted" data-label="カテゴリ">${esc(it.cat || "")}</td>
+      <td data-label="カテゴリ"><select data-edit="cat" data-id="${it.id}" style="width:96px"><option value="">なし</option>${[...new Set([...data.categories, ...(it.cat ? [it.cat] : [])])].map(c => `<option value="${esc(c)}"${c === it.cat ? " selected" : ""}>${esc(c)}</option>`).join("")}</select></td>
       <td class="num" data-label="在庫"><input type="number" step="0.5" min="0" value="${it.qty}" style="width:64px" data-edit="qty" data-id="${it.id}"></td>
       <td class="num" data-label="月間使用"><input type="number" step="0.1" min="0" value="${it.monthlyUse}" style="width:64px" data-edit="monthlyUse" data-id="${it.id}"></td>
       <td class="num" data-label="残り目安">${isFinite(m) ? m.toFixed(1) + "ヶ月" : "—"}</td>
@@ -591,8 +605,13 @@ function renderStock() {
       <td data-label="操作"><button class="btn small" data-judge="${it.id}">判定へ</button> <button class="btn small danger" data-del="${it.id}">削除</button></td>`;
     tb.appendChild(tr);
   }
-  const cats = [...new Set(data.items.map(i => i.cat).filter(Boolean))];
-  document.getElementById("catList").innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
+  // 追加フォームのカテゴリプルダウン(選択中の値は維持する)
+  const catSel = document.getElementById("stCat");
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">なし</option>'
+    + data.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")
+    + '<option value="__addnew__">＋新規作成...</option>';
+  if ([...catSel.options].some(o => o.value === curCat)) catSel.value = curCat;
   const names = data.items.map(i => i.name);
   const opts = names.map(n => `<option value="${esc(n)}">`).join("");
   document.getElementById("itemList").innerHTML = opts;
@@ -603,15 +622,27 @@ const monthsLeft = it => it.monthlyUse > 0 ? it.qty / it.monthlyUse : Infinity;
 document.getElementById("btnAddStock").addEventListener("click", () => {
   const name = val("stName").trim();
   if (!name) { alert("品名を入れてください"); return; }
-  data.items.push({ id: uid(), name, cat: val("stCat").trim(), qty: num("stQty"), monthlyUse: num("stUse"), refAmount: num("stAmount"), unit: val("stUnit").trim(), refSuper: num("stRefSuper"), refAmazon: num("stRefAmazon"), lastUpdated: new Date().toISOString().slice(0, 10) });
+  const cat = val("stCat") === "__addnew__" ? "" : val("stCat");
+  data.items.push({ id: uid(), name, cat, qty: num("stQty"), monthlyUse: num("stUse"), refAmount: num("stAmount"), unit: val("stUnit").trim(), refSuper: num("stRefSuper"), refAmazon: num("stRefAmazon"), lastUpdated: new Date().toISOString().slice(0, 10) });
   ["stName", "stCat", "stAmount", "stUnit", "stRefSuper", "stRefAmazon"].forEach(id => document.getElementById(id).value = "");
   save(); renderAll();
+});
+
+// 追加フォームで「＋新規作成...」を選んだら、その場でカテゴリを作って選択状態にする
+document.getElementById("stCat").addEventListener("change", () => {
+  const sel = document.getElementById("stCat");
+  if (sel.value !== "__addnew__") return;
+  const name = (prompt("新しいカテゴリ名を入れてください(例: 洗剤)") || "").trim();
+  if (name && !data.categories.includes(name)) { data.categories.push(name); save(); }
+  renderAll(); // プルダウンの選択肢を作り直す
+  sel.value = name && data.categories.includes(name) ? name : "";
 });
 
 document.querySelector("#stockTable").addEventListener("change", e => {
   const el = e.target; if (!el.dataset.edit) return;
   const it = data.items.find(i => i.id === el.dataset.id); if (!it) return;
-  it[el.dataset.edit] = parseFloat(el.value) || 0;
+  if (el.dataset.edit === "cat") it.cat = el.value; // カテゴリは文字列のまま保存
+  else it[el.dataset.edit] = parseFloat(el.value) || 0;
   if (el.dataset.edit === "qty") it.lastUpdated = todayISO(); // 在庫を直した日を「確認日」として記録(リマインドの起点になる)
   save(); renderAll();
 });
@@ -1049,7 +1080,30 @@ function renderSettings() {
   document.getElementById("setAppId").value = s.rakutenAppId || "";
   document.getElementById("setAccessKey").value = s.rakutenAccessKey || "";
   document.getElementById("setGhToken").value = s.ghToken || "";
+  // カテゴリ管理の一覧(使用中の品目数も表示)
+  document.getElementById("catManage").innerHTML = data.categories.length
+    ? data.categories.map(c => {
+        const n = data.items.filter(i => i.cat === c).length;
+        return `<span class="badge info" style="margin:2px 4px 2px 0;display:inline-block">${esc(c)}${n ? ` <span style="font-weight:normal">(${n}品目)</span>` : ""} <a href="#" data-delcat="${esc(c)}" title="このカテゴリを削除" style="text-decoration:none;color:inherit">✕</a></span>`;
+      }).join("")
+    : '<p class="note">まだカテゴリがありません。上の欄に入力して「追加」を押してください。</p>';
 }
+document.getElementById("btnAddCat").addEventListener("click", () => {
+  const name = val("setNewCat").trim();
+  if (!name) { alert("カテゴリ名を入れてください"); return; }
+  if (data.categories.includes(name)) { alert("同じ名前のカテゴリがすでにあります"); return; }
+  data.categories.push(name);
+  document.getElementById("setNewCat").value = "";
+  save(); renderAll();
+});
+document.getElementById("catManage").addEventListener("click", e => {
+  const c = e.target.dataset.delcat; if (!c) return;
+  e.preventDefault();
+  const n = data.items.filter(i => i.cat === c).length;
+  if (!confirm(`カテゴリ「${c}」を削除しますか?` + (n ? `\n(${n}品目で使用中です。品目の表示は残りますが、新規選択の候補からは消えます)` : ""))) return;
+  data.categories = data.categories.filter(x => x !== c);
+  save(); renderAll();
+});
 document.getElementById("btnSaveSettings").addEventListener("click", () => {
   data.settings = { cap: num("setCap"), spu: num("setSpu"), goZero: num("setGoZero"), goZeroOn: parseInt(val("setGoZeroOn")), ptValue: num("setPtValue") || 1, rakutenAppId: val("setAppId").trim(), rakutenAccessKey: val("setAccessKey").trim(), ghToken: val("setGhToken").trim(), gistId: data.settings.gistId || "" };
   save(); renderAll();
@@ -1120,6 +1174,7 @@ document.getElementById("btnCloudLoad").addEventListener("click", async () => {
     const keep = { ghToken: s.ghToken, gistId: s.gistId }; // 端末側の合鍵は保持する
     data = Object.assign(defaultData(), d);
     data.settings = Object.assign(defaultData().settings, d.settings || {}, keep);
+    syncCats(data);
     save(); renderAll();
     alert("☁ クラウドから読み込みました");
   } catch (e) { alert("読み込みに失敗しました: " + e.message); }
@@ -1143,6 +1198,7 @@ document.getElementById("fileImport").addEventListener("change", e => {
       const d = JSON.parse(rd.result);
       if (!confirm("現在のデータを読み込んだデータで上書きします。よろしいですか?")) return;
       data = Object.assign(defaultData(), d);
+      syncCats(data);
       save(); renderAll();
       alert("読み込みました");
     } catch (err) { alert("ファイルを読み込めませんでした: " + err.message); }
