@@ -157,7 +157,7 @@
     table.cardify td::before {
       content: attr(data-label); display: block; font-size: 10px; color: var(--sub);
     }
-    table.cardify td input, table.cardify td select { width: 100% !important; }
+    table.cardify td input:not([type="checkbox"]), table.cardify td select { width: 100% !important; }
 
     /* ストック一覧: 1段目=品名+状態、2段目=在庫/使用量/残り、3段目=価格類、4段目=底値+操作 */
     /* 内容量(+単位)とAmazon(+🔍)は「入力欄+添え物」の2列に分ける */
@@ -296,7 +296,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="note">残り目安が2ヶ月を切ると「そろそろ」、1ヶ月を切ると「買い時」になります。在庫数・使用量はセル内で直接編集できます。<b>在庫は自動では減りません</b>。日にちが経って計算上0.5個以上減っていそうな品目は、このタブの上に「🔔 在庫は減りましたか?」の確認が出るので、実際の残りに合わせて更新してください。</p>
+    <p class="note">残り目安が2ヶ月を切ると「そろそろ」、1ヶ月を切ると「買い時」になります。在庫数・使用量はセル内で直接編集できます。<b>在庫は自動では減りません</b>。日にちが経って計算上0.5個以上減っていそうな品目は、このタブの上に「🔔 在庫は減りましたか?」の確認が出るので、実際の残りに合わせて更新してください。月間使用の<b>「自動」にチェック</b>を入れると、在庫を更新するたびに「何日で何個減ったか」の実績(直近8回分)の平均から月間使用量を自動で計算し直します。登録後いちばん最初の在庫更新は基準合わせとして数えず、<b>2回目の更新から</b>実績を取ります。使用量を手入力すると自動はOFFに戻ります。</p>
   </div>
 </div>
 
@@ -477,6 +477,26 @@ const daysSince = it => Math.max(0, Math.floor((new Date(todayISO()) - new Date(
 const estimatedQty = it => Math.max(0, Math.round((it.qty - daysSince(it) * it.monthlyUse / 30) * 100) / 100);
 const needsCheck = it => it.monthlyUse > 0 && it.qty > 0 && daysSince(it) * it.monthlyUse / 30 >= 0.5;
 
+// 消費実績の記録と月間使用量の自動算出
+// 在庫が更新されるたびに「何日で何個減ったか」を記録し、「自動」ONの品目は平均から使用量を計算し直す
+function recordUse(it, used, days) {
+  if (days < 1 || used < 0) return; // 同日内の修正(入力ミス直し等)や増加は実績にしない
+  // 登録後いちばん最初の在庫更新は「基準合わせ」として実績に数えない
+  // (最初の一括登録は使いかけ品などで数がラフなことが多いため。計測は2回目の更新から)
+  if (!it.useReady) { it.useReady = true; return; }
+  if (!Array.isArray(it.useLog)) it.useLog = [];
+  it.useLog.push({ d: days, u: Math.round(used * 100) / 100 });
+  if (it.useLog.length > 8) it.useLog.shift(); // 直近8回分だけ使う(生活の変化に追従させる)
+  if (it.autoUse) { const v = calcAutoUse(it); if (v != null) it.monthlyUse = v; }
+}
+function calcAutoUse(it) {
+  if (!Array.isArray(it.useLog) || !it.useLog.length) return null;
+  const days = it.useLog.reduce((a, x) => a + x.d, 0);
+  const used = it.useLog.reduce((a, x) => a + x.u, 0);
+  if (days < 7) return null; // 実績が合計1週間分に満たないうちは算出しない
+  return Math.round(used / days * 30 * 100) / 100;
+}
+
 function renderRemind() {
   const card = document.getElementById("stockRemindCard");
   const tb = document.querySelector("#remindTable tbody");
@@ -498,7 +518,9 @@ document.querySelector("#remindTable").addEventListener("click", e => {
   const est = e.target.dataset.remindEst, keep = e.target.dataset.remindKeep;
   const id = est || keep; if (!id) return;
   const it = data.items.find(i => i.id === id); if (!it) return;
+  const before = it.qty;
   if (est) it.qty = estimatedQty(it);
+  recordUse(it, before - it.qty, daysSince(it)); // 「減っていない」も消費0の実績として記録する
   it.lastUpdated = todayISO(); // 「減っていない」でも今日を確認日にしてリマインドを消す
   save(); renderAll();
 });
@@ -595,7 +617,7 @@ function renderStock() {
       <td data-label="品名">${esc(it.name)}</td>
       <td data-label="カテゴリ"><select data-edit="cat" data-id="${it.id}" style="width:96px"><option value="">なし</option>${[...new Set([...data.categories, ...(it.cat ? [it.cat] : [])])].map(c => `<option value="${esc(c)}"${c === it.cat ? " selected" : ""}>${esc(c)}</option>`).join("")}</select></td>
       <td class="num" data-label="在庫"><input type="number" step="0.5" min="0" value="${it.qty}" style="width:64px" data-edit="qty" data-id="${it.id}"></td>
-      <td class="num" data-label="月間使用"><input type="number" step="0.1" min="0" value="${it.monthlyUse}" style="width:64px" data-edit="monthlyUse" data-id="${it.id}"></td>
+      <td class="num" data-label="月間使用"><input type="number" step="0.1" min="0" value="${it.monthlyUse}" style="width:64px" data-edit="monthlyUse" data-id="${it.id}"${it.autoUse ? ' title="自動算出中(手入力すると自動はOFFになります)"' : ""}><label class="note" style="display:block;font-size:11px;cursor:pointer;white-space:nowrap" title="実際の減り方(直近${(it.useLog || []).length}回の実績)から月間使用量を自動計算します"><input type="checkbox" data-autouse="${it.id}"${it.autoUse ? " checked" : ""}> 自動</label></td>
       <td class="num" data-label="残り目安">${isFinite(m) ? m.toFixed(1) + "ヶ月" : "—"}</td>
       <td data-label="状態">${badge}</td>
       <td class="num" data-label="内容量"><input type="number" min="0" value="${it.refAmount || ""}" placeholder="—" style="width:64px" data-edit="refAmount" data-id="${it.id}"><span class="note">${esc(it.unit || "")}</span></td>
@@ -639,11 +661,29 @@ document.getElementById("stCat").addEventListener("change", () => {
 });
 
 document.querySelector("#stockTable").addEventListener("change", e => {
-  const el = e.target; if (!el.dataset.edit) return;
+  const el = e.target;
+  if (el.dataset.autouse) { // 月間使用量の「自動」チェック切替
+    const it = data.items.find(i => i.id === el.dataset.autouse); if (!it) return;
+    it.autoUse = el.checked;
+    if (el.checked) {
+      const v = calcAutoUse(it);
+      if (v != null) it.monthlyUse = v;
+      else alert("まだ実績が足りないため、今の値のまま始めます。\n「自動」をONにしておくと、在庫を更新するたびに実際の減り方が記録され、実績が合計7日分たまったところから自動計算されます。");
+    }
+    save(); renderAll(); return;
+  }
+  if (!el.dataset.edit) return;
   const it = data.items.find(i => i.id === el.dataset.id); if (!it) return;
   if (el.dataset.edit === "cat") it.cat = el.value; // カテゴリは文字列のまま保存
-  else it[el.dataset.edit] = parseFloat(el.value) || 0;
-  if (el.dataset.edit === "qty") it.lastUpdated = todayISO(); // 在庫を直した日を「確認日」として記録(リマインドの起点になる)
+  else if (el.dataset.edit === "qty") {
+    const nv = parseFloat(el.value) || 0;
+    if (nv < it.qty) recordUse(it, it.qty - nv, daysSince(it)); // 減った分は消費実績に記録(増えた分=買い足しは対象外)
+    it.qty = nv;
+    it.lastUpdated = todayISO(); // 在庫を直した日を「確認日」として記録(リマインドの起点になる)
+  } else {
+    it[el.dataset.edit] = parseFloat(el.value) || 0;
+    if (el.dataset.edit === "monthlyUse") it.autoUse = false; // 使用量を手入力したら自動算出はOFFに戻す
+  }
   save(); renderAll();
 });
 document.querySelector("#stockTable").addEventListener("click", e => {
